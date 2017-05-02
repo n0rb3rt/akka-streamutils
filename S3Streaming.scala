@@ -32,7 +32,8 @@ abstract class S3Streaming (implicit actorSystem: ActorSystem) {
    meta: ObjectMetadata,
    bucket: String,
    parallel: Int = 4,
-   chunkSize: Int = 8 * 1024 * 1024
+   chunkSize: Int = 8 * 1024 * 1024,
+   bufSize: Int = 4 * 1024
  ): Source[ByteString, NotUsed] = {
 
     val length = meta.getContentLength
@@ -47,9 +48,15 @@ abstract class S3Streaming (implicit actorSystem: ActorSystem) {
     }
     .mapAsync(parallel){ req =>
       Future(client.getObject(req)).map{ obj =>
-        val bytes = ByteString(IOUtils.toByteArray(obj.getObjectContent))
+        val buf = new Array[Byte](bufSize)
+        val bytes = ByteString.newBuilder
+
+        Iterator.continually(obj.getObjectContent.read(buf))
+          .takeWhile(_ != -1)
+          .foreach(readLen => bytes.putBytes(buf, 0, readLen))
+
         obj.close()
-        bytes
+        bytes.result()
       }
     }
   }
