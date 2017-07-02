@@ -18,11 +18,11 @@ trait CassandraStreaming {
   
   val scrollRows: Flow[ResultSet, Row, NotUsed] = {
     Flow[ResultSet].flatMapConcat{ rs =>
-      val firstPage = Source(rs.take(rs.getAvailableWithoutFetching).toVector)
+      val firstPage = Source(rs.take(rs.getAvailableWithoutFetching).toList)
       val nextPages = Source.unfoldAsync(()){ _ =>
         if (rs.isExhausted) Future.successful(None)
         else rs.fetchMoreResults().map{ _ =>
-          Some(() -> rs.take(rs.getAvailableWithoutFetching).toVector))
+          Some(() -> rs.take(rs.getAvailableWithoutFetching).toList))
         }
       }
       firstPage ++ nextPages.mapConcat(identity)
